@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Inflection Protocol — Daily Check-In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAF6EF;
+    --card:#FFFFFF;
+    --ink:#4B4844;
+    --ink-soft:#8B8579;
+    --hairline:#D9D5C9;
+    --blue:#70A4DB;
+    --blue-bg:#E2ECF7;
+    --amber:#C96B4C;
+    --amber-bg:#F6E3DB;
+    --teal:#5E8A7E;
+    --teal-bg:#E8F1EE;
+    --plum:#70A4DB;
+    --plum-bg:#E2ECF7;
+    --gray-bg:#D9D5C9;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Work Sans', sans-serif;
+    padding:32px 16px 64px;
+  }
+  .wrap{max-width:600px;margin:0 auto;}
+  .eyebrow{
+    font-size:12px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin:0 0 4px;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:500;
+    font-size:28px;
+    margin:0 0 24px;
+  }
+  .curve-wrap{position:relative;height:34px;margin:0 0 28px;}
+  .curve-wrap svg{width:100%;height:100%;display:block;}
+  .goal-card{
+    background:var(--card);
+    border:0.5px solid var(--hairline);
+    border-radius:14px;
+    padding:18px 20px;
+    margin-bottom:24px;
+  }
+  .goal-label{font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px;}
+  .goal-text{font-family:'Fraunces', serif;font-size:17px;line-height:1.5;margin:0;}
+  .goal-edit-btn{
+    background:none;border:0.5px solid var(--hairline);border-radius:8px;
+    font-family:'Work Sans',sans-serif;font-size:12px;color:var(--ink-soft);
+    padding:5px 10px;margin-top:12px;cursor:pointer;
+  }
+  .goal-edit-btn:hover{border-color:var(--ink-soft);}
+  .goal-inputs{display:none;flex-direction:column;gap:8px;margin-top:10px;}
+  .goal-inputs.open{display:flex;}
+  .goal-inputs input{
+    font-family:'Work Sans',sans-serif;font-size:14px;padding:8px 10px;
+    border:0.5px solid var(--hairline);border-radius:8px;background:var(--bg);
+  }
+  .goal-save{
+    align-self:flex-start;background:var(--blue);color:#fff;border:none;
+    border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;margin-top:2px;
+  }
+  section{margin-bottom:28px;}
+  .section-title{
+    font-size:12px;letter-spacing:0.06em;text-transform:uppercase;
+    color:var(--ink-soft);margin:0 0 10px;
+  }
+  .task-list{display:flex;flex-direction:column;gap:8px;}
+  .task{
+    display:flex;align-items:center;gap:12px;
+    background:var(--card);border:0.5px solid var(--hairline);border-radius:10px;
+    padding:12px 14px;cursor:pointer;
+  }
+  .task input[type=checkbox]{width:18px;height:18px;accent-color:var(--teal);flex-shrink:0;}
+  .task-text{font-size:14px;flex:1;}
+  .task.done .task-text{color:var(--ink-soft);text-decoration:line-through;}
+  .tag{font-size:10px;padding:2px 8px;border-radius:20px;letter-spacing:0.03em;flex-shrink:0;}
+  .tag.habit{background:var(--gray-bg);color:var(--ink-soft);}
+  .tag.assigned{background:var(--amber-bg);color:var(--amber);}
+  .tag.individualized{background:var(--teal-bg);color:var(--teal);}
+  .tag.self_chosen{background:var(--plum-bg);color:var(--plum);}
+  textarea{
+    width:100%;font-family:'Work Sans',sans-serif;font-size:14px;
+    border:0.5px solid var(--hairline);border-radius:10px;padding:12px 14px;
+    background:var(--card);resize:vertical;min-height:44px;margin-bottom:8px;
+  }
+  .reflect-hint{font-size:12px;color:var(--ink-soft);margin:0 0 12px;}
+  .save-bar{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-top:8px;
+  }
+  .save-btn{
+    background:var(--blue);color:#fff;border:none;border-radius:10px;
+    padding:12px 22px;font-family:'Work Sans',sans-serif;font-size:14px;font-weight:500;
+    cursor:pointer;
+  }
+  .save-btn:active{transform:scale(0.98);}
+  .status{font-size:12px;color:var(--ink-soft);}
+  .streak{display:flex;gap:5px;margin-top:6px;}
+  .streak-dot{width:11px;height:11px;border-radius:50%;background:var(--gray-bg);}
+  .streak-dot.filled{background:var(--teal);}
+  .response-box{
+    background:var(--bg);border:0.5px dashed var(--hairline);border-radius:10px;
+    padding:10px 12px;margin:-2px 0 4px;
+  }
+  .response-box textarea{border:none;background:transparent;padding:0;min-height:70px;margin-bottom:0;}
+  .response-label{font-size:11px;color:var(--ink-soft);margin:0 0 4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow" id="phaseLabel">Phase 1 · The Audit · Week 1</p>
+  <h1>Today's check-in</h1>
+
+  <p class="reflect-hint" id="emailPrompt" style="margin-top:-14px;cursor:pointer;text-decoration:underline;"></p>
+  <div class="goal-inputs" id="emailInputs">
+    <input type="text" id="emailField" placeholder="you@example.com">
+    <button class="goal-save" id="emailSaveBtn">Save email</button>
+  </div>
+
+  <div id="weekSelectorWrap" style="margin:16px 0 24px;">
+    <label for="weekSelect" style="font-size:12px;color:var(--ink-soft);margin-right:8px;">Preview week:</label>
+    <select id="weekSelect" style="font-family:'Work Sans',sans-serif;font-size:13px;padding:4px 8px;border:0.5px solid var(--hairline);border-radius:6px;background:var(--card);"></select>
+  </div>
+
+  <div style="margin:0 0 24px;">
+    <button class="goal-edit-btn" id="historyBtn">Email me my previous answers</button>
+    <div id="historyPanel" style="display:none;margin-top:12px;"></div>
+  </div>
+
+  <div class="curve-wrap">
+    <svg viewBox="0 0 560 34" preserveAspectRatio="none">
+      <path d="M0,28 C160,28 220,30 280,17 C340,4 400,6 560,6" fill="none" stroke="#E6DFD1" stroke-width="2"/>
+      <path id="curveProgress" d="M0,28 C160,28 220,30 280,17 C340,4 400,6 560,6" fill="none" stroke="#C96B4C" stroke-width="2" stroke-dasharray="900" stroke-dashoffset="900"/>
+    </svg>
+  </div>
+
+  <div class="goal-card">
+    <p class="goal-label">Your goal statement · set at the start of this phase</p>
+    <p class="goal-text" id="goalDisplay">Because of feeling stuck in patterns I didn't choose, I want to become someone who follows through without waiting to feel ready.</p>
+    <button class="goal-edit-btn" id="goalEditToggle">Edit — this checkpoint is open</button>
+    <div class="goal-inputs" id="goalInputs">
+      <input type="text" id="goalX" placeholder="Because of...">
+      <input type="text" id="goalY" placeholder="I want to...">
+      <button class="goal-save" id="goalSaveBtn">Save goal statement</button>
+      <span class="status" id="goalStatusMsg" style="margin-left:8px;"></span>
+    </div>
+  </div>
+
+  <section>
+    <p class="section-title">This week's tasks</p>
+    <p class="reflect-hint" style="margin-top:-6px;">Complete once — stays checked for the rest of the week</p>
+    <div class="task-list" id="assignedList"></div>
+  </section>
+
+  <section>
+    <p class="section-title">Habits</p>
+    <p class="reflect-hint" style="margin-top:-6px;">Complete each day</p>
+    <div class="task-list" id="habitList"></div>
+  </section>
+
+  <section>
+    <p class="section-title">Your task</p>
+    <div class="task-list" id="individualList"></div>
+    <button class="goal-edit-btn" id="taskEditToggle" style="margin-top:8px;">Edit — this checkpoint is open</button>
+    <div class="goal-inputs" id="taskInputs">
+      <input type="text" id="taskText" placeholder="Your one daily task...">
+      <button class="goal-save" id="taskSaveBtn">Save task</button>
+      <span class="status" id="taskStatusMsg" style="margin-left:8px;"></span>
+    </div>
+  </section>
+
+  <section>
+    <p class="section-title">Tonight's reflection — three sentences</p>
+    <p class="reflect-hint">What you did. What you felt. What you noticed.</p>
+    <textarea id="s1" placeholder="What you did..."></textarea>
+    <textarea id="s2" placeholder="What you felt..."></textarea>
+    <textarea id="s3" placeholder="What you noticed..."></textarea>
+  </section>
+
+  <div class="save-bar">
+    <button class="save-btn" id="saveBtn">Save today's check-in</button>
+    <span class="status" id="statusMsg"></span>
+  </div>
+
+  <section style="margin-top:32px;">
+    <p class="section-title">Last 7 days</p>
+    <div class="streak" id="streakRow"></div>
+  </section>
+
+</div>
+
+<script>
+/* ---------- 12-week content config ---------- */
+const WEEK_TITLES = {
+  1:"Show Up For Yourself", 2:"Name Where You Are", 3:"Define The Gap",
+  4:"Find The Old Story", 5:"Audit Your Environment", 6:"Name The New Identity",
+  7:"Build The Morning", 8:"Act In Private", 9:"Stack The Evidence",
+  10:"Go First", 11:"Court Rejection", 12:"Live As Them"
+};
+const PHASE_NAMES = {
+  1:"Phase 1 · The Audit", 2:"Phase 2 · The Rebuild",
+  3:"Phase 3 · The Install", 4:"Phase 4 · The Deploy"
+};
+function phaseForWeek(n){ return n<=3?1 : n<=6?2 : n<=9?3 : 4; }
+function governingCheckpointWeek(n){ return n>=10?10 : n>=7?7 : n>=4?4 : 1; }
+function isCheckpointWeek(n){ return [1,4,7,10].includes(n); }
+
+// Assigned (weekly) tasks only — habits and the individualized task are handled separately.
+// hasResponse:true marks the 5 flagged long-form tasks that feed the phase reports.
+const WEEKS_CONFIG = {
+  1: [],
+  2: [
+    {text:"Write a current-state letter to yourself", hasResponse:true},
+    {text:"List 5 things you're proud of (not achievement-based)"},
+    {text:"Name one place you've been lying to yourself"},
+    {text:"Log whether you felt like yourself today"},
+    {text:"Notice one small thing in your space that reflects who you've been — remove it"}
+  ],
+  3: [
+    {text:"Write a present-tense description of who you're becoming"},
+    {text:"List 5 concrete daily-life differences"},
+    {text:"Name the biggest gap between now and then"},
+    {text:"Find an object, image, or word representing that version of you"},
+    {text:"Write your inflection statement", hasResponse:true}
+  ],
+  4: [
+    {text:'Complete 10 "I could never ___ because ___" statements'},
+    {text:"Trace one belief back to its origin"},
+    {text:"Ask someone what story they think you tell about yourself"},
+    {text:"Write a letter to your younger self"}
+  ],
+  5: [
+    {text:"Do a screen time audit"},
+    {text:"Map 3 people who energize old you and 3 who energize new you"},
+    {text:"Environment task — anchored to a specific goal, creates a path forward"},
+    {text:"Label your routines as old-identity or new-identity"},
+    {text:"Name a boundary (you don't have to act on it yet)"}
+  ],
+  6: [
+    {text:'Write 10 "I am" statements, present tense'},
+    {text:"Study 3 people (real or fictional) who embody the new identity"},
+    {text:"Choose one small visible signal of the shift"},
+    {text:"Write a full paragraph identity description", hasResponse:true},
+    {text:"Share your inflection statement with one trusted person"}
+  ],
+  7: [
+    {text:"Design your new morning routine and run it daily"},
+    {text:"Log what's working and what feels forced"},
+    {text:"Start one new-identity behavior"},
+    {text:"Drop one old-identity morning habit for the week"}
+  ],
+  8: [
+    {text:"Complete one action you've been deferring"},
+    {text:"Frame yourself internally as the new identity in new situations"},
+    {text:"Journal entirely in present tense, as the new identity"},
+    {text:"Say no to one old-identity thing"},
+    {text:"Take one small-courage action"}
+  ],
+  9: [
+    {text:"Keep a daily evidence log"},
+    {text:"Review Weeks 1–8 journal entries for growth moments"},
+    {text:"Identify someone who's noticed a change in you"},
+    {text:"Write a progress letter from new-you to Week 1-you", hasResponse:true},
+    {text:'Define what "locked in" looks like in 90 days'}
+  ],
+  10: [
+    {text:"Start a conversation with a stranger tied to your goals"},
+    {text:"Ask directly for something you'd normally just accept"},
+    {text:"Reach out to one person — the start of building a network on purpose"},
+    {text:"Share something about your journey publicly"},
+    {text:"Do one thing the old you would've avoided"}
+  ],
+  11: [
+    {text:"Make one goal-tied ask, even though it's uncomfortable"},
+    {text:"Cold contact someone you admire — the start of an ongoing relationship"},
+    {text:"Ask for honest, possibly hard feedback"},
+    {text:"Make one out-of-reach social ask"},
+    {text:"Document every rejection you get this week"}
+  ],
+  12: [
+    {text:"Write a final letter from new-you to Week 1-you", hasResponse:true},
+    {text:"Build your post-protocol routine (distillation, not reinvention)"},
+    {text:"Make one final bold ask"},
+    {text:"Name your next inflection point"},
+    {text:"Plan a real celebration"}
+  ]
+};
+
+/* ---------- automatic week calculation (per-participant, rolling admission) ---------- */
+function calculateWeekFromStartDate(startDateStr){
+  const start = new Date(startDateStr + "T00:00:00");
+  const now = new Date();
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysElapsed = Math.floor((now - start) / msPerDay);
+  if(daysElapsed < 0) return 1; // start date is in the future — default to Week 1 view
+  const week = Math.floor(daysElapsed / 7) + 1;
+  return Math.min(Math.max(week, 1), 12); // clamp to 1–12
+}
+
+async function fetchParticipantWeek(email){
+  if(!RELAY_URL || !email) return null;
+  try{
+    const response = await fetch(RELAY_URL, { method: "POST", body: JSON.stringify({ type: "startDate", email: email }) });
+    const result = await response.json();
+    if(result.status === 'ok' && result.startDate){
+      try{ await window.storage.set('participant:startdate', result.startDate); }catch(e){}
+      return calculateWeekFromStartDate(result.startDate);
+    }
+    return null;
+  }catch(e){
+    return null;
+  }
+}
+
+// Hidden testing override: add ?previewWeek=5 to the URL to preview any week
+// without affecting what real participants see. Only shows the selector
+// dropdown when this override is present — participants never see it.
+function getPreviewOverride(){
+  const params = new URLSearchParams(window.location.search);
+  const val = parseInt(params.get('previewWeek'));
+  return (val >= 1 && val <= 12) ? val : null;
+}
+
+/* ---------- state ---------- */
+const todayKey = () => 'checkin:' + new Date().toISOString().slice(0,10);
+const weekKey = (weekNum) => 'weektasks:week' + weekNum;
+
+// Paste your deployed Apps Script Web App URL here once you have it.
+const RELAY_URL = "https://script.google.com/macros/s/AKfycby_i9nKl3pQsbm6cQhTLV9Z2d11fJs8M4JlAl_FR1VKeIQ8MrhjKhG2Pw0S0BSS30OD/exec";
+
+let participantEmail = "";
+let currentWeek = 1;
+
+const defaultHabits = [
+  {text:"Make your bed", source:"habit", completed:false},
+  {text:"Glass of water before your phone", source:"habit", completed:false},
+  {text:"10 minutes of movement", source:"habit", completed:false},
+];
+
+let state = {
+  habits: JSON.parse(JSON.stringify(defaultHabits)),
+  assigned: [],
+  individual: {text:"", source:"individualized", completed:false},
+  s1:"", s2:"", s3:""
+};
+
+/* ---------- participant email ---------- */
+async function loadParticipantEmail(){
+  try{
+    const result = await window.storage.get('participant:email');
+    if(result && result.value){ participantEmail = result.value; }
+  }catch(e){ /* not set yet */ }
+  updateEmailPrompt();
+}
+function updateEmailPrompt(){
+  const el = document.getElementById('emailPrompt');
+  el.textContent = participantEmail
+    ? "Will sync as: " + participantEmail + " (tap to change)"
+    : "Tap here to enter your email so your check-ins sync to Airtable";
+}
+document.getElementById('emailPrompt').addEventListener('click', () => {
+  document.getElementById('emailInputs').classList.toggle('open');
+  document.getElementById('emailField').value = participantEmail || "";
+});
+document.getElementById('emailSaveBtn').addEventListener('click', async () => {
+  const entered = document.getElementById('emailField').value.trim();
+  if(!entered) return;
+  participantEmail = entered;
+  try{ await window.storage.set('participant:email', participantEmail); }catch(e){}
+  document.getElementById('emailInputs').classList.remove('open');
+  updateEmailPrompt();
+
+  if(!getPreviewOverride()){
+    document.getElementById('phaseLabel').textContent = "Loading your week...";
+    const week = await fetchParticipantWeek(participantEmail);
+    if(week){
+      await loadWeek(week);
+    } else {
+      document.getElementById('phaseLabel').textContent = "Couldn't find your start date — check your email or try again";
+    }
+  }
+});
+
+/* ---------- rendering ---------- */
+function renderTasks(){
+  const habitList = document.getElementById('habitList');
+  const assignedList = document.getElementById('assignedList');
+  const individualList = document.getElementById('individualList');
+  habitList.innerHTML = ""; assignedList.innerHTML = ""; individualList.innerHTML = "";
+
+  state.habits.forEach((t, i) => {
+    habitList.appendChild(taskRow(t, () => { state.habits[i].completed = !state.habits[i].completed; renderTasks(); }));
+  });
+  state.assigned.forEach((t, i) => {
+    assignedList.appendChild(taskRow(t, async () => {
+      state.assigned[i].completed = !state.assigned[i].completed;
+      renderTasks();
+      try{ await window.storage.set(weekKey(currentWeek), JSON.stringify(state.assigned)); }catch(e){ /* persists on next successful save */ }
+    }));
+  });
+  individualList.appendChild(taskRow(state.individual, () => { state.individual.completed = !state.individual.completed; renderTasks(); }));
+}
+
+function taskRow(t, onToggle){
+  const wrap = document.createElement('div');
+  const row = document.createElement('div');
+  row.className = 'task' + (t.completed ? ' done' : '');
+  row.innerHTML = `
+    <input type="checkbox" ${t.completed ? 'checked' : ''}>
+    <span class="task-text">${t.text}</span>
+    <span class="tag ${t.source}">${t.source.replace('_',' ')}</span>
+  `;
+  row.addEventListener('click', () => { onToggle(); });
+  wrap.appendChild(row);
+
+  if(t.hasResponse){
+    const box = document.createElement('div');
+    box.className = 'response-box';
+    box.innerHTML = `<p class="response-label">Your response — this one gets saved for your progress report</p>`;
+    const ta = document.createElement('textarea');
+    ta.placeholder = "Write here...";
+    ta.value = t.response || "";
+    ta.addEventListener('input', (e) => { t.response = e.target.value; });
+    box.appendChild(ta);
+    wrap.appendChild(box);
+  }
+  return wrap;
+}
+
+/* ---------- goal statement + individualized task (checkpoint-scoped) ---------- */
+async function loadCheckpointFields(){
+  const checkpointId = "Week " + governingCheckpointWeek(currentWeek);
+  const editable = isCheckpointWeek(currentWeek);
+
+  document.getElementById('goalEditToggle').style.display = editable ? '' : 'none';
+  document.getElementById('taskEditToggle').style.display = editable ? '' : 'none';
+  document.getElementById('goalInputs').classList.remove('open');
+  document.getElementById('taskInputs').classList.remove('open');
+
+  try{
+    const g = await window.storage.get('goal:' + checkpointId);
+    if(g && g.value){
+      const parsed = JSON.parse(g.value);
+      document.getElementById('goalDisplay').textContent = parsed.text;
+      document.getElementById('goalX').value = parsed.x || "";
+      document.getElementById('goalY').value = parsed.y || "";
+    } else {
+      document.getElementById('goalDisplay').textContent = "Not set yet for " + checkpointId + " — tap Edit to add it.";
+      document.getElementById('goalX').value = ""; document.getElementById('goalY').value = "";
+    }
+  }catch(e){
+    document.getElementById('goalDisplay').textContent = "Not set yet for " + checkpointId + " — tap Edit to add it.";
+    document.getElementById('goalX').value = ""; document.getElementById('goalY').value = "";
+  }
+
+  try{
+    const savedTask = await window.storage.get('individualtask:' + checkpointId);
+    if(savedTask && savedTask.value){
+      state.individual.text = savedTask.value;
+      document.getElementById('taskText').value = savedTask.value;
+    } else {
+      state.individual.text = "Not set yet for " + checkpointId + " — tap Edit below to choose one.";
+      document.getElementById('taskText').value = "";
+    }
+  }catch(e){
+    state.individual.text = "Not set yet for " + checkpointId + " — tap Edit below to choose one.";
+    document.getElementById('taskText').value = "";
+  }
+}
+
+document.getElementById('goalEditToggle').addEventListener('click', () => {
+  document.getElementById('goalInputs').classList.toggle('open');
+});
+document.getElementById('goalSaveBtn').addEventListener('click', async () => {
+  const x = document.getElementById('goalX').value.trim();
+  const y = document.getElementById('goalY').value.trim();
+  if(!x || !y) return;
+  const text = `Because of ${x}, I want to ${y}.`;
+  const checkpointId = "Week " + governingCheckpointWeek(currentWeek);
+  document.getElementById('goalDisplay').textContent = text;
+  document.getElementById('goalInputs').classList.remove('open');
+  try{ await window.storage.set('goal:' + checkpointId, JSON.stringify({x,y,text})); }catch(e){}
+  await syncGoalToAirtable(x, y, checkpointId);
+});
+
+document.getElementById('taskEditToggle').addEventListener('click', () => {
+  document.getElementById('taskInputs').classList.toggle('open');
+});
+document.getElementById('taskSaveBtn').addEventListener('click', async () => {
+  const newText = document.getElementById('taskText').value.trim();
+  if(!newText) return;
+  const checkpointId = "Week " + governingCheckpointWeek(currentWeek);
+  state.individual.text = newText;
+  document.getElementById('taskInputs').classList.remove('open');
+  const el = document.getElementById('taskStatusMsg');
+  try{
+    await window.storage.set('individualtask:' + checkpointId, newText);
+    el.textContent = "Saved";
+  }catch(e){
+    el.textContent = "Couldn't save locally — it'll still sync when you save today's check-in";
+  }
+  renderTasks();
+});
+
+async function syncGoalToAirtable(becauseX, wantY, checkpointId){
+  const el = document.getElementById('goalStatusMsg');
+  if(!RELAY_URL){ el.textContent = "No Airtable connection configured yet"; return; }
+  if(!participantEmail){ el.textContent = "Add your email below first, then save again"; return; }
+  el.textContent = "Saving...";
+  try{
+    const response = await fetch(RELAY_URL, {
+      method: "POST",
+      body: JSON.stringify({ type: "goal", email: participantEmail, checkpoint: checkpointId, becauseX, wantY })
+    });
+    const result = await response.json();
+    el.textContent = result.status === 'ok' ? "Saved to Airtable" : ("Sync issue: " + (result.message || "unknown error"));
+  }catch(e){
+    el.textContent = "Couldn't reach the Airtable relay";
+  }
+}
+
+/* ---------- daily + weekly load/save ---------- */
+async function loadToday(){
+  try{
+    const result = await window.storage.get(todayKey());
+    if(result && result.value){
+      const saved = JSON.parse(result.value);
+      if(saved.habits) state.habits = saved.habits;
+      if(saved.individual) state.individual.completed = saved.individual.completed;
+      state.s1 = saved.s1 || ""; state.s2 = saved.s2 || ""; state.s3 = saved.s3 || "";
+    } else {
+      state.s1 = ""; state.s2 = ""; state.s3 = "";
+    }
+  }catch(e){
+    state.s1 = ""; state.s2 = ""; state.s3 = "";
+  }
+  document.getElementById('s1').value = state.s1;
+  document.getElementById('s2').value = state.s2;
+  document.getElementById('s3').value = state.s3;
+
+  try{
+    const weekResult = await window.storage.get(weekKey(currentWeek));
+    if(weekResult && weekResult.value){
+      const savedAssigned = JSON.parse(weekResult.value);
+      // merge saved completion/response state onto this week's real task list, matched by text
+      state.assigned = state.assigned.map(t => {
+        const match = savedAssigned.find(s => s.text === t.text);
+        return match ? {...t, completed: match.completed, response: match.response} : t;
+      });
+    }
+  }catch(e){ /* no weekly progress saved yet */ }
+
+  renderTasks();
+  await renderStreak();
+}
+
+async function syncToAirtable(){
+  if(!RELAY_URL){ document.getElementById('statusMsg').textContent = "No Airtable connection configured yet"; return; }
+  if(!participantEmail){ document.getElementById('statusMsg').textContent = "Add your email above, then save again to sync"; return; }
+  document.getElementById('statusMsg').textContent = "Saving...";
+  try{
+    const payload = {
+      email: participantEmail,
+      date: new Date().toISOString().slice(0,10),
+      weekContext: document.getElementById('phaseLabel').textContent,
+      tasksJson: JSON.stringify([...state.habits, ...state.assigned, state.individual]),
+      s1: state.s1, s2: state.s2, s3: state.s3
+    };
+    const response = await fetch(RELAY_URL, { method: "POST", body: JSON.stringify(payload) });
+    const result = await response.json();
+    document.getElementById('statusMsg').textContent = result.status === 'ok'
+      ? "Saved to Airtable"
+      : "Sync issue: " + (result.message || "unknown error");
+  }catch(e){
+    document.getElementById('statusMsg').textContent = "Couldn't reach the Airtable relay — check the deployment URL";
+  }
+}
+
+async function saveToday(){
+  state.s1 = document.getElementById('s1').value;
+  state.s2 = document.getElementById('s2').value;
+  state.s3 = document.getElementById('s3').value;
+
+  const completedCount = state.habits.filter(t=>t.completed).length + state.assigned.filter(t=>t.completed).length + (state.individual.completed?1:0);
+  const total = state.habits.length + state.assigned.length + 1;
+  const pct = completedCount/total;
+  document.getElementById('curveProgress').style.strokeDashoffset = String(900 - Math.round(900*pct));
+
+  await syncToAirtable();
+
+  const dailyRecord = { habits: state.habits, individual: {completed: state.individual.completed}, s1: state.s1, s2: state.s2, s3: state.s3 };
+  try{
+    await window.storage.set(todayKey(), JSON.stringify(dailyRecord));
+    await window.storage.set(weekKey(currentWeek), JSON.stringify(state.assigned));
+    await renderStreak();
+  }catch(e){ /* local save unavailable outside Claude's preview — Airtable sync above is the real save when hosted elsewhere */ }
+}
+
+async function renderStreak(){
+  const row = document.getElementById('streakRow');
+  row.innerHTML = "";
+  for(let i=6;i>=0;i--){
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const key = 'checkin:' + d.toISOString().slice(0,10);
+    let filled = false;
+    try{
+      const result = await window.storage.get(key);
+      if(result && result.value){
+        const saved = JSON.parse(result.value);
+        const done = (saved.habits||[]).filter(t=>t.completed).length + (saved.individual && saved.individual.completed ? 1 : 0);
+        filled = done > 0;
+      }
+    }catch(e){ /* no entry that day */ }
+    const dot = document.createElement('div');
+    dot.className = 'streak-dot' + (filled ? ' filled' : '');
+    row.appendChild(dot);
+  }
+}
+document.getElementById('saveBtn').addEventListener('click', saveToday);
+
+/* ---------- week switching ---------- */
+async function loadWeek(n){
+  currentWeek = n;
+  document.getElementById('phaseLabel').textContent =
+    PHASE_NAMES[phaseForWeek(n)] + " · Week " + n + " · " + WEEK_TITLES[n];
+
+  state.habits = JSON.parse(JSON.stringify(defaultHabits));
+  state.assigned = WEEKS_CONFIG[n].map(t => ({...t, source:"assigned", completed:false, response: t.hasResponse ? "" : undefined}));
+  state.individual.completed = false;
+
+  await loadCheckpointFields();
+  await loadToday();
+}
+
+const weekSelect = document.getElementById('weekSelect');
+for(let n=1;n<=12;n++){
+  const opt = document.createElement('option');
+  opt.value = n;
+  opt.textContent = "Week " + n + " — " + WEEK_TITLES[n];
+  weekSelect.appendChild(opt);
+}
+weekSelect.addEventListener('change', (e) => { loadWeek(parseInt(e.target.value)); });
+
+/* ---------- read previous answers (delivered by email, not shown here) ---------- */
+async function loadHistory(){
+  const panel = document.getElementById('historyPanel');
+  const isOpen = panel.style.display === 'block';
+  if(isOpen){ panel.style.display = 'none'; return; }
+
+  panel.innerHTML = "";
+  panel.style.display = 'block';
+
+  if(!participantEmail){
+    const p = document.createElement('p'); p.className = 'reflect-hint';
+    p.textContent = "Add your email above first, then tap this again.";
+    panel.appendChild(p); return;
+  }
+  if(!RELAY_URL){
+    const p = document.createElement('p'); p.className = 'reflect-hint';
+    p.textContent = "No Airtable connection configured yet.";
+    panel.appendChild(p); return;
+  }
+
+  const loading = document.createElement('p'); loading.className = 'reflect-hint';
+  loading.textContent = "Sending your past answers to your email...";
+  panel.appendChild(loading);
+
+  try{
+    const response = await fetch(RELAY_URL, { method: "POST", body: JSON.stringify({ type: "history", email: participantEmail }) });
+    const result = await response.json();
+    panel.innerHTML = "";
+    const p = document.createElement('p'); p.className = 'reflect-hint';
+    p.textContent = result.status === 'ok'
+      ? (result.message || "Check your email for your past answers.")
+      : (result.message || "Something went wrong sending that.");
+    panel.appendChild(p);
+  }catch(e){
+    panel.innerHTML = "";
+    const p = document.createElement('p'); p.className = 'reflect-hint';
+    p.textContent = "Couldn't reach the Airtable relay.";
+    panel.appendChild(p);
+  }
+}
+document.getElementById('historyBtn').addEventListener('click', loadHistory);
+
+/* ---------- init ---------- */
+(async function init(){
+  await loadParticipantEmail();
+  const override = getPreviewOverride();
+
+  if(override){
+    document.getElementById('weekSelectorWrap').style.display = '';
+    weekSelect.value = override;
+    await loadWeek(override);
+    return;
+  }
+
+  document.getElementById('weekSelectorWrap').style.display = 'none';
+
+  if(!participantEmail){
+    // Brand new visitor — nothing to calculate yet. Show a neutral Week 1
+    // view and prompt for email; entering it triggers the real calculation.
+    document.getElementById('phaseLabel').textContent = "Enter your email above to load your check-in";
+    await loadWeek(1);
+    return;
+  }
+
+  // Returning participant: try a cached start date first for a fast load,
+  // then quietly refresh from Airtable in case it's ever changed.
+  let week = null;
+  try{
+    const cached = await window.storage.get('participant:startdate');
+    if(cached && cached.value){ week = calculateWeekFromStartDate(cached.value); }
+  }catch(e){ /* no cache yet */ }
+
+  if(week){ await loadWeek(week); }
+
+  const freshWeek = await fetchParticipantWeek(participantEmail);
+  if(freshWeek && freshWeek !== week){
+    await loadWeek(freshWeek);
+  } else if(!week && freshWeek){
+    await loadWeek(freshWeek);
+  } else if(!week && !freshWeek){
+    document.getElementById('phaseLabel').textContent = "Couldn't find your start date — check your email or try again";
+    await loadWeek(1);
+  }
+})();
+</script>
+</body>
+</html>
