@@ -475,6 +475,7 @@ async function loadCheckpointFields(){
   document.getElementById('taskInputs').classList.remove('open');
 
   document.getElementById('goalDisplay').textContent = "Loading...";
+  state.individual.text = "Loading...";
   try{
     if(RELAY_URL && participantEmail){
       const response = await fetch(RELAY_URL, { method: "POST", body: JSON.stringify({ type: "getGoal", email: participantEmail, checkpoint: checkpointId }) });
@@ -484,31 +485,29 @@ async function loadCheckpointFields(){
         document.getElementById('goalDisplay').textContent = text;
         document.getElementById('goalX').value = result.becauseX;
         document.getElementById('goalY').value = result.wantY;
+        if(result.individualTask){
+          state.individual.text = result.individualTask;
+          document.getElementById('taskText').value = result.individualTask;
+        } else {
+          state.individual.text = "Not set yet for " + checkpointId + " — tap Edit below to choose one.";
+          document.getElementById('taskText').value = "";
+        }
       } else {
         document.getElementById('goalDisplay').textContent = "Not set yet for " + checkpointId + " — tap Edit to add it.";
         document.getElementById('goalX').value = ""; document.getElementById('goalY').value = "";
+        state.individual.text = "Not set yet for " + checkpointId + " — tap Edit below to choose one.";
+        document.getElementById('taskText').value = "";
       }
     } else {
       document.getElementById('goalDisplay').textContent = "Add your email above first to load your goal statement.";
+      state.individual.text = "Add your email above first to load your task.";
     }
   }catch(e){
     document.getElementById('goalDisplay').textContent = "Couldn't load your goal statement — check your connection.";
-  }
-
-  try{
-    const savedTask = await safeStorage.get('individualtask:' + checkpointId);
-    if(savedTask && savedTask.value){
-      state.individual.text = savedTask.value;
-      document.getElementById('taskText').value = savedTask.value;
-    } else {
-      state.individual.text = "Not set yet for " + checkpointId + " — tap Edit below to choose one.";
-      document.getElementById('taskText').value = "";
-    }
-  }catch(e){
-    state.individual.text = "Not set yet for " + checkpointId + " — tap Edit below to choose one.";
-    document.getElementById('taskText').value = "";
+    state.individual.text = "Couldn't load your task — check your connection.";
   }
 }
+
 
 document.getElementById('goalEditToggle').addEventListener('click', () => {
   document.getElementById('goalInputs').classList.toggle('open');
@@ -535,11 +534,18 @@ document.getElementById('taskSaveBtn').addEventListener('click', async () => {
   state.individual.text = newText;
   document.getElementById('taskInputs').classList.remove('open');
   const el = document.getElementById('taskStatusMsg');
+  if(!RELAY_URL){ el.textContent = "No Airtable connection configured yet"; renderTasks(); return; }
+  if(!participantEmail){ el.textContent = "Add your email above first, then save again"; renderTasks(); return; }
+  el.textContent = "Saving...";
   try{
-    await safeStorage.set('individualtask:' + checkpointId, newText);
-    el.textContent = "Saved";
+    const response = await fetch(RELAY_URL, {
+      method: "POST",
+      body: JSON.stringify({ type: "task", email: participantEmail, checkpoint: checkpointId, taskText: newText })
+    });
+    const result = await response.json();
+    el.textContent = result.status === 'ok' ? "Saved to Airtable" : ("Sync issue: " + (result.message || "unknown error"));
   }catch(e){
-    el.textContent = "Couldn't save locally — it'll still sync when you save today's check-in";
+    el.textContent = "Couldn't reach the Airtable relay";
   }
   renderTasks();
 });
