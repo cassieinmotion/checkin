@@ -317,7 +317,7 @@ async function fetchParticipantWeek(email){
     const response = await fetch(RELAY_URL, { method: "POST", body: JSON.stringify({ type: "startDate", email: email }) });
     const result = await response.json();
     if(result.status === 'ok' && result.startDate){
-      try{ await window.storage.set('participant:startdate', result.startDate); }catch(e){}
+      try{ await safeStorage.set('participant:startdate', result.startDate); }catch(e){}
       return calculateWeekFromStartDate(result.startDate);
     }
     return null;
@@ -342,6 +342,29 @@ const weekKey = (weekNum) => 'weektasks:week' + weekNum;
 // Paste your deployed Apps Script Web App URL here once you have it.
 const RELAY_URL = "https://script.google.com/macros/s/AKfycbwKCrD-zrcX2E32ntAsQBvJmr_f7B7RLQDWZwbD9JYgLsf4MX1fRl3rqTifJDiFrK5H/exec";
 
+// window.storage only exists inside Claude's own preview — on the real
+// hosted site (GitHub Pages) it's simply not there, so every call to it
+// would silently fail every time. safeStorage tries it first (useful while
+// testing inside Claude), and falls back to real browser localStorage
+// otherwise — which genuinely works once this is actually hosted.
+const safeStorage = {
+  async get(key){
+    try{
+      if(window.storage) return await window.storage.get(key);
+    }catch(e){ /* fall through to localStorage */ }
+    const val = localStorage.getItem(key);
+    if(val === null) throw new Error('not found');
+    return { key, value: val };
+  },
+  async set(key, value){
+    try{
+      if(window.storage) return await window.storage.set(key, value);
+    }catch(e){ /* fall through to localStorage */ }
+    localStorage.setItem(key, value);
+    return { key, value };
+  }
+};
+
 let participantEmail = "";
 let currentWeek = 1;
 
@@ -361,7 +384,7 @@ let state = {
 /* ---------- participant email ---------- */
 async function loadParticipantEmail(){
   try{
-    const result = await window.storage.get('participant:email');
+    const result = await safeStorage.get('participant:email');
     if(result && result.value){ participantEmail = result.value; }
   }catch(e){ /* not set yet */ }
   updateEmailPrompt();
@@ -380,7 +403,7 @@ document.getElementById('emailSaveBtn').addEventListener('click', async () => {
   const entered = document.getElementById('emailField').value.trim();
   if(!entered) return;
   participantEmail = entered;
-  try{ await window.storage.set('participant:email', participantEmail); }catch(e){}
+  try{ await safeStorage.set('participant:email', participantEmail); }catch(e){}
   document.getElementById('emailInputs').classList.remove('open');
   updateEmailPrompt();
 
@@ -409,7 +432,7 @@ function renderTasks(){
     assignedList.appendChild(taskRow(t, async () => {
       state.assigned[i].completed = !state.assigned[i].completed;
       renderTasks();
-      try{ await window.storage.set(weekKey(currentWeek), JSON.stringify(state.assigned)); }catch(e){ /* persists on next successful save */ }
+      try{ await safeStorage.set(weekKey(currentWeek), JSON.stringify(state.assigned)); }catch(e){ /* persists on next successful save */ }
     }));
   });
   individualList.appendChild(taskRow(state.individual, () => { state.individual.completed = !state.individual.completed; renderTasks(); }));
@@ -451,24 +474,29 @@ async function loadCheckpointFields(){
   document.getElementById('goalInputs').classList.remove('open');
   document.getElementById('taskInputs').classList.remove('open');
 
+  document.getElementById('goalDisplay').textContent = "Loading...";
   try{
-    const g = await window.storage.get('goal:' + checkpointId);
-    if(g && g.value){
-      const parsed = JSON.parse(g.value);
-      document.getElementById('goalDisplay').textContent = parsed.text;
-      document.getElementById('goalX').value = parsed.x || "";
-      document.getElementById('goalY').value = parsed.y || "";
+    if(RELAY_URL && participantEmail){
+      const response = await fetch(RELAY_URL, { method: "POST", body: JSON.stringify({ type: "getGoal", email: participantEmail, checkpoint: checkpointId }) });
+      const result = await response.json();
+      if(result.status === 'ok' && result.found){
+        const text = `Because of ${result.becauseX}, I want to ${result.wantY}.`;
+        document.getElementById('goalDisplay').textContent = text;
+        document.getElementById('goalX').value = result.becauseX;
+        document.getElementById('goalY').value = result.wantY;
+      } else {
+        document.getElementById('goalDisplay').textContent = "Not set yet for " + checkpointId + " — tap Edit to add it.";
+        document.getElementById('goalX').value = ""; document.getElementById('goalY').value = "";
+      }
     } else {
-      document.getElementById('goalDisplay').textContent = "Not set yet for " + checkpointId + " — tap Edit to add it.";
-      document.getElementById('goalX').value = ""; document.getElementById('goalY').value = "";
+      document.getElementById('goalDisplay').textContent = "Add your email above first to load your goal statement.";
     }
   }catch(e){
-    document.getElementById('goalDisplay').textContent = "Not set yet for " + checkpointId + " — tap Edit to add it.";
-    document.getElementById('goalX').value = ""; document.getElementById('goalY').value = "";
+    document.getElementById('goalDisplay').textContent = "Couldn't load your goal statement — check your connection.";
   }
 
   try{
-    const savedTask = await window.storage.get('individualtask:' + checkpointId);
+    const savedTask = await safeStorage.get('individualtask:' + checkpointId);
     if(savedTask && savedTask.value){
       state.individual.text = savedTask.value;
       document.getElementById('taskText').value = savedTask.value;
@@ -493,7 +521,7 @@ document.getElementById('goalSaveBtn').addEventListener('click', async () => {
   const checkpointId = "Week " + governingCheckpointWeek(currentWeek);
   document.getElementById('goalDisplay').textContent = text;
   document.getElementById('goalInputs').classList.remove('open');
-  try{ await window.storage.set('goal:' + checkpointId, JSON.stringify({x,y,text})); }catch(e){}
+  try{ await safeStorage.set('goal:' + checkpointId, JSON.stringify({x,y,text})); }catch(e){}
   await syncGoalToAirtable(x, y, checkpointId);
 });
 
@@ -508,7 +536,7 @@ document.getElementById('taskSaveBtn').addEventListener('click', async () => {
   document.getElementById('taskInputs').classList.remove('open');
   const el = document.getElementById('taskStatusMsg');
   try{
-    await window.storage.set('individualtask:' + checkpointId, newText);
+    await safeStorage.set('individualtask:' + checkpointId, newText);
     el.textContent = "Saved";
   }catch(e){
     el.textContent = "Couldn't save locally — it'll still sync when you save today's check-in";
@@ -536,7 +564,7 @@ async function syncGoalToAirtable(becauseX, wantY, checkpointId){
 /* ---------- daily + weekly load/save ---------- */
 async function loadToday(){
   try{
-    const result = await window.storage.get(todayKey());
+    const result = await safeStorage.get(todayKey());
     if(result && result.value){
       const saved = JSON.parse(result.value);
       if(saved.habits) state.habits = saved.habits;
@@ -553,7 +581,7 @@ async function loadToday(){
   document.getElementById('s3').value = state.s3;
 
   try{
-    const weekResult = await window.storage.get(weekKey(currentWeek));
+    const weekResult = await safeStorage.get(weekKey(currentWeek));
     if(weekResult && weekResult.value){
       const savedAssigned = JSON.parse(weekResult.value);
       // merge saved completion/response state onto this week's real task list, matched by text
@@ -604,8 +632,8 @@ async function saveToday(){
 
   const dailyRecord = { habits: state.habits, individual: {completed: state.individual.completed}, s1: state.s1, s2: state.s2, s3: state.s3 };
   try{
-    await window.storage.set(todayKey(), JSON.stringify(dailyRecord));
-    await window.storage.set(weekKey(currentWeek), JSON.stringify(state.assigned));
+    await safeStorage.set(todayKey(), JSON.stringify(dailyRecord));
+    await safeStorage.set(weekKey(currentWeek), JSON.stringify(state.assigned));
     await renderStreak();
   }catch(e){ /* local save unavailable outside Claude's preview — Airtable sync above is the real save when hosted elsewhere */ }
 }
@@ -618,7 +646,7 @@ async function renderStreak(){
     const key = 'checkin:' + d.toISOString().slice(0,10);
     let filled = false;
     try{
-      const result = await window.storage.get(key);
+      const result = await safeStorage.get(key);
       if(result && result.value){
         const saved = JSON.parse(result.value);
         const done = (saved.habits||[]).filter(t=>t.completed).length + (saved.individual && saved.individual.completed ? 1 : 0);
@@ -723,7 +751,7 @@ document.getElementById('historyBtn').addEventListener('click', loadHistory);
   // then quietly refresh from Airtable in case it's ever changed.
   let week = null;
   try{
-    const cached = await window.storage.get('participant:startdate');
+    const cached = await safeStorage.get('participant:startdate');
     if(cached && cached.value){ week = calculateWeekFromStartDate(cached.value); }
   }catch(e){ /* no cache yet */ }
 
