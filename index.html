@@ -116,9 +116,20 @@
   .status{font-size:12px;color:var(--ink-soft);}
   .status.error{color:var(--amber);font-weight:600;}
   .status.ok{color:var(--teal);font-weight:600;}
+  .day-nav{display:flex;align-items:center;gap:10px;margin:0 0 20px;}
+  .day-nav-btn{
+    width:30px;height:30px;border-radius:50%;border:0.5px solid var(--hairline);
+    background:var(--card);color:var(--ink);font-size:15px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .day-nav-btn:hover:not(:disabled){border-color:var(--ink-soft);}
+  .day-nav-btn:disabled{opacity:0.3;cursor:default;}
+  .day-nav-label{font-size:13px;color:var(--ink-soft);flex:1;}
+  .day-nav-label.past{color:var(--amber);font-weight:500;}
   .streak{display:flex;gap:5px;margin-top:6px;}
-  .streak-dot{width:11px;height:11px;border-radius:50%;background:var(--gray-bg);}
+  .streak-dot{width:11px;height:11px;border-radius:50%;background:var(--gray-bg);cursor:pointer;}
   .streak-dot.filled{background:var(--teal);}
+  .streak-dot.current{box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--ink-soft);}
   .response-box{
     background:var(--bg);border:0.5px dashed var(--hairline);border-radius:10px;
     padding:10px 12px;margin:-2px 0 4px;
@@ -131,7 +142,14 @@
 <div class="wrap">
 
   <p class="eyebrow" id="phaseLabel">Phase 1 · The Audit · Week 1</p>
-  <h1>Today's check-in</h1>
+  <h1 id="mainHeading">Today's check-in</h1>
+
+  <div class="day-nav" id="dayNav" style="display:none;">
+    <button class="day-nav-btn" id="prevDayBtn" aria-label="Previous day">←</button>
+    <span class="day-nav-label" id="dayNavLabel">Today</span>
+    <button class="day-nav-btn" id="nextDayBtn" aria-label="Next day">→</button>
+    <button class="goal-edit-btn" id="jumpToTodayBtn" style="display:none;">Jump to today</button>
+  </div>
 
   <p class="reflect-hint" id="emailPrompt" style="margin-top:-14px;cursor:pointer;text-decoration:underline;"></p>
   <div class="goal-inputs" id="emailInputs">
@@ -192,7 +210,7 @@
   </section>
 
   <section>
-    <p class="section-title">Tonight's reflection — three sentences</p>
+    <p class="section-title" id="reflectionHeading">Tonight's reflection — three sentences</p>
     <p class="reflect-hint">What you did. What you felt. What you noticed.</p>
     <textarea id="s1" placeholder="What you did..."></textarea>
     <textarea id="s2" placeholder="What you felt..."></textarea>
@@ -343,6 +361,7 @@ function calculateWeekFromStartDate(startDateStr){
 // Day-of-week within the participant's current week (1–7). Used to gate the
 // close-out reflection so it can't be completed before the week is actually over.
 let participantStartDate = null;
+let realCurrentWeek = null; // the week they're ACTUALLY in right now, per real time — distinct from currentWeek, which is whichever week's task list is on screen (may be a past week they've navigated back to)
 function calculateDayOfWeekFromStartDate(startDateStr){
   const start = new Date(startDateStr + "T00:00:00");
   const now = new Date();
@@ -357,6 +376,20 @@ function currentDayOfWeek(){
   return calculateDayOfWeekFromStartDate(participantStartDate);
 }
 
+// Given the participant's start date and any calendar date, returns which
+// program week and day-of-week that date falls on. Powers "go back to any
+// past day" navigation in the daily check-in tool.
+function weekAndDayForDate(startDateStr, dateStr){
+  const start = new Date(startDateStr + "T00:00:00");
+  const target = new Date(dateStr + "T00:00:00");
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysElapsed = Math.floor((target - start) / msPerDay);
+  if(daysElapsed < 0) return { week:1, day:1 };
+  const week = Math.min(Math.max(Math.floor(daysElapsed / 7) + 1, 1), 12);
+  const day = (daysElapsed % 7) + 1;
+  return { week, day };
+}
+
 async function fetchParticipantWeek(email){
   if(!RELAY_URL || !email) return null;
   try{
@@ -364,6 +397,7 @@ async function fetchParticipantWeek(email){
     const result = await response.json();
     if(result.status === 'ok' && result.startDate){
       participantStartDate = result.startDate;
+      realCurrentWeek = calculateWeekFromStartDate(result.startDate);
       try{ await safeStorage.set('participant:startdate', result.startDate); }catch(e){}
       return calculateWeekFromStartDate(result.startDate);
     }
@@ -423,6 +457,7 @@ const safeStorage = {
 
 let participantEmail = "";
 let currentWeek = 1;
+let viewingDate = null; // the day being viewed/edited — defaults to today, but can be any past day
 
 const defaultHabits = [
   {text:"Make your bed", source:"habit", completed:false},
@@ -500,7 +535,7 @@ function taskRow(t, onToggle){
 
   if(t.source === 'reflection'){
     const dow = currentDayOfWeek();
-    const locked = (dow !== null) && (dow < t.unlockDay) && !t.completed;
+    const locked = (currentWeek === realCurrentWeek) && (dow !== null) && (dow < t.unlockDay) && !t.completed;
     row.className = 'task' + (t.completed ? ' done' : '') + (locked ? ' locked' : '');
     if(locked){
       row.innerHTML = `
@@ -693,9 +728,10 @@ async function syncGoalToAirtable(becauseX, wantY, checkpointId){
 }
 
 /* ---------- daily + weekly load/save ---------- */
-async function loadToday(){
+async function loadToday(dateStr){
+  dateStr = dateStr || localDateStr();
   try{
-    const result = await safeStorage.get(todayKey());
+    const result = await safeStorage.get('checkin:' + dateStr);
     if(result && result.value){
       const saved = JSON.parse(result.value);
       if(saved.habits) state.habits = saved.habits;
@@ -734,7 +770,7 @@ async function syncToAirtable(){
   try{
     const payload = {
       email: participantEmail,
-      date: localDateStr(),
+      date: viewingDate || localDateStr(),
       weekContext: document.getElementById('phaseLabel').textContent,
       tasksJson: JSON.stringify([...state.habits, ...state.assigned, state.individual]),
       s1: state.s1, s2: state.s2, s3: state.s3
@@ -753,7 +789,8 @@ async function saveToday(){
   const btn = document.getElementById('saveBtn');
   if(btn.disabled) return; // already saving — ignore a second click
   btn.disabled = true;
-  const originalLabel = btn.textContent;
+  const isToday = viewingDate === localDateStr();
+  const originalLabel = isToday ? "Save today's check-in" : "Save this day's check-in";
   btn.textContent = "Saving...";
 
   state.s1 = document.getElementById('s1').value;
@@ -769,7 +806,7 @@ async function saveToday(){
 
   const dailyRecord = { habits: state.habits, individual: {completed: state.individual.completed}, s1: state.s1, s2: state.s2, s3: state.s3 };
   try{
-    await safeStorage.set(todayKey(), JSON.stringify(dailyRecord));
+    await safeStorage.set('checkin:' + (viewingDate || localDateStr()), JSON.stringify(dailyRecord));
     await safeStorage.set(weekKey(currentWeek), JSON.stringify(state.assigned));
     await renderStreak();
   }catch(e){ /* local save unavailable outside Claude's preview — Airtable sync above is the real save when hosted elsewhere */ }
@@ -783,7 +820,8 @@ async function renderStreak(){
   row.innerHTML = "";
   for(let i=6;i>=0;i--){
     const d = new Date(); d.setDate(d.getDate()-i);
-    const key = 'checkin:' + localDateStr(d);
+    const dateStr = localDateStr(d);
+    const key = 'checkin:' + dateStr;
     let filled = false;
     try{
       const result = await safeStorage.get(key);
@@ -794,15 +832,23 @@ async function renderStreak(){
       }
     }catch(e){ /* no entry that day */ }
     const dot = document.createElement('div');
-    dot.className = 'streak-dot' + (filled ? ' filled' : '');
+    dot.className = 'streak-dot' + (filled ? ' filled' : '') + (dateStr === viewingDate ? ' current' : '');
+    dot.title = formatDateLabel(dateStr) + (dateStr === localDateStr() ? ' (today)' : '');
+    // Only real, known days are clickable — this row always shows the actual
+    // last 7 calendar days regardless of which day is on screen, and every
+    // one of them is a valid past-or-today day, so no bounds check needed.
+    if(participantStartDate && !getPreviewOverride()){
+      dot.addEventListener('click', () => { goToDate(dateStr); });
+    }
     row.appendChild(dot);
   }
 }
 document.getElementById('saveBtn').addEventListener('click', saveToday);
 
 /* ---------- week switching ---------- */
-async function loadWeek(n){
+async function loadWeek(n, dateStr){
   currentWeek = n;
+  viewingDate = dateStr || localDateStr();
   document.getElementById('phaseLabel').textContent =
     PHASE_NAMES[phaseForWeek(n)] + " · Week " + n + " · " + WEEK_TITLES[n];
 
@@ -811,8 +857,71 @@ async function loadWeek(n){
   state.individual.completed = false;
 
   await loadCheckpointFields();
-  await loadToday();
+  await loadToday(viewingDate);
+  updateDayNav();
 }
+
+function formatDateLabel(dateStr){
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+}
+
+function updateDayNav(){
+  const nav = document.getElementById('dayNav');
+  const label = document.getElementById('dayNavLabel');
+  const prevBtn = document.getElementById('prevDayBtn');
+  const nextBtn = document.getElementById('nextDayBtn');
+  const jumpBtn = document.getElementById('jumpToTodayBtn');
+  const heading = document.getElementById('mainHeading');
+
+  // No known start date (preview mode, brand-new visitor) — nothing to
+  // navigate relative to, so hide the nav and leave the page as-is.
+  if(!participantStartDate || getPreviewOverride()){
+    nav.style.display = 'none';
+    return;
+  }
+
+  nav.style.display = 'flex';
+  const today = localDateStr();
+  const isToday = viewingDate === today;
+
+  label.textContent = isToday ? "Today" : formatDateLabel(viewingDate);
+  label.className = 'day-nav-label' + (isToday ? '' : ' past');
+  if(heading) heading.textContent = isToday ? "Today's check-in" : "Check-in for " + formatDateLabel(viewingDate);
+  const reflectionHeading = document.getElementById('reflectionHeading');
+  if(reflectionHeading) reflectionHeading.textContent = isToday ? "Tonight's reflection — three sentences" : "That day's reflection — three sentences";
+
+  prevBtn.disabled = viewingDate <= participantStartDate;
+  nextBtn.disabled = viewingDate >= today;
+  jumpBtn.style.display = isToday ? 'none' : '';
+}
+
+async function goToDate(dateStr){
+  // Clamp to the valid range: can't go before the program started, and
+  // can't get ahead of the real, actual today.
+  const today = localDateStr();
+  if(dateStr > today) dateStr = today;
+  if(participantStartDate && dateStr < participantStartDate) dateStr = participantStartDate;
+
+  const { week } = weekAndDayForDate(participantStartDate, dateStr);
+  await loadWeek(week, dateStr);
+}
+
+function shiftDate(dateStr, deltaDays){
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + deltaDays);
+  return localDateStr(d);
+}
+
+document.getElementById('prevDayBtn').addEventListener('click', () => {
+  goToDate(shiftDate(viewingDate, -1));
+});
+document.getElementById('nextDayBtn').addEventListener('click', () => {
+  goToDate(shiftDate(viewingDate, 1));
+});
+document.getElementById('jumpToTodayBtn').addEventListener('click', () => {
+  goToDate(localDateStr());
+});
 
 const weekSelect = document.getElementById('weekSelect');
 for(let n=1;n<=12;n++){
@@ -892,7 +1001,7 @@ document.getElementById('historyBtn').addEventListener('click', loadHistory);
   let week = null;
   try{
     const cached = await safeStorage.get('participant:startdate');
-    if(cached && cached.value){ participantStartDate = cached.value; week = calculateWeekFromStartDate(cached.value); }
+    if(cached && cached.value){ participantStartDate = cached.value; realCurrentWeek = calculateWeekFromStartDate(cached.value); week = realCurrentWeek; }
   }catch(e){ /* no cache yet */ }
 
   if(week){ await loadWeek(week); }
