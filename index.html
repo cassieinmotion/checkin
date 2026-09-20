@@ -114,6 +114,8 @@
   }
   .save-btn:active{transform:scale(0.98);}
   .status{font-size:12px;color:var(--ink-soft);}
+  .status.error{color:var(--amber);font-weight:600;}
+  .status.ok{color:var(--teal);font-weight:600;}
   .streak{display:flex;gap:5px;margin-top:6px;}
   .streak-dot{width:11px;height:11px;border-radius:50%;background:var(--gray-bg);}
   .streak-dot.filled{background:var(--teal);}
@@ -596,13 +598,27 @@ document.getElementById('goalEditToggle').addEventListener('click', () => {
 document.getElementById('goalSaveBtn').addEventListener('click', async () => {
   const x = document.getElementById('goalX').value.trim();
   const y = document.getElementById('goalY').value.trim();
-  if(!x || !y) return;
+  const el = document.getElementById('goalStatusMsg');
+  if(!x || !y){
+    el.className = 'status error';
+    el.textContent = "Fill in both fields before saving.";
+    return;
+  }
   const text = `Because of ${x}, I want to ${y}.`;
   const checkpointId = "Week " + governingCheckpointWeek(currentWeek);
-  document.getElementById('goalDisplay').textContent = text;
-  document.getElementById('goalInputs').classList.remove('open');
-  try{ await safeStorage.set('goal:' + checkpointId, JSON.stringify({x,y,text})); }catch(e){}
-  await syncGoalToAirtable(x, y, checkpointId);
+  const btn = document.getElementById('goalSaveBtn');
+  btn.disabled = true;
+
+  const success = await syncGoalToAirtable(x, y, checkpointId);
+
+  btn.disabled = false;
+  if(success){
+    document.getElementById('goalDisplay').textContent = text;
+    document.getElementById('goalInputs').classList.remove('open');
+    try{ await safeStorage.set('goal:' + checkpointId, JSON.stringify({x,y,text})); }catch(e){}
+  }
+  // On failure: the form stays open with what they typed still in it,
+  // and syncGoalToAirtable already left a visible error message in place.
 });
 
 document.getElementById('taskEditToggle').addEventListener('click', () => {
@@ -610,31 +626,49 @@ document.getElementById('taskEditToggle').addEventListener('click', () => {
 });
 document.getElementById('taskSaveBtn').addEventListener('click', async () => {
   const newText = document.getElementById('taskText').value.trim();
-  if(!newText) return;
-  const checkpointId = "Week " + governingCheckpointWeek(currentWeek);
-  state.individual.text = newText;
-  document.getElementById('taskInputs').classList.remove('open');
   const el = document.getElementById('taskStatusMsg');
-  if(!RELAY_URL){ el.textContent = "No Airtable connection configured yet"; renderTasks(); return; }
-  if(!participantEmail){ el.textContent = "Add your email above first, then save again"; renderTasks(); return; }
+  if(!newText){
+    el.className = 'status error';
+    el.textContent = "Enter your task before saving.";
+    return;
+  }
+  const checkpointId = "Week " + governingCheckpointWeek(currentWeek);
+  const btn = document.getElementById('taskSaveBtn');
+  btn.disabled = true;
+  el.className = 'status';
   el.textContent = "Saving...";
+
+  if(!RELAY_URL){ el.className = 'status error'; el.textContent = "No Airtable connection configured yet"; btn.disabled = false; return; }
+  if(!participantEmail){ el.className = 'status error'; el.textContent = "Add your email above first, then save again"; btn.disabled = false; return; }
+
   try{
     const response = await fetch(RELAY_URL, {
       method: "POST",
       body: JSON.stringify({ type: "task", email: participantEmail, checkpoint: checkpointId, taskText: newText })
     });
     const result = await response.json();
-    el.textContent = result.status === 'ok' ? "Saved to Airtable" : ("Sync issue: " + (result.message || "unknown error"));
+    if(result.status === 'ok'){
+      el.className = 'status ok';
+      el.textContent = "Saved to Airtable";
+      state.individual.text = newText;
+      document.getElementById('taskInputs').classList.remove('open');
+      renderTasks();
+    } else {
+      el.className = 'status error';
+      el.textContent = "Not saved — " + (result.message || "unknown error") + ". Your answer is still in the box above, try Save again.";
+    }
   }catch(e){
-    el.textContent = "Couldn't reach the Airtable relay";
+    el.className = 'status error';
+    el.textContent = "Not saved — couldn't reach the Airtable relay. Your answer is still in the box above, try Save again.";
   }
-  renderTasks();
+  btn.disabled = false;
 });
 
 async function syncGoalToAirtable(becauseX, wantY, checkpointId){
   const el = document.getElementById('goalStatusMsg');
-  if(!RELAY_URL){ el.textContent = "No Airtable connection configured yet"; return; }
-  if(!participantEmail){ el.textContent = "Add your email below first, then save again"; return; }
+  el.className = 'status';
+  if(!RELAY_URL){ el.textContent = "No Airtable connection configured yet"; el.classList.add('error'); return false; }
+  if(!participantEmail){ el.textContent = "Add your email below first, then save again"; el.classList.add('error'); return false; }
   el.textContent = "Saving...";
   try{
     const response = await fetch(RELAY_URL, {
@@ -642,9 +676,19 @@ async function syncGoalToAirtable(becauseX, wantY, checkpointId){
       body: JSON.stringify({ type: "goal", email: participantEmail, checkpoint: checkpointId, becauseX, wantY })
     });
     const result = await response.json();
-    el.textContent = result.status === 'ok' ? "Saved to Airtable" : ("Sync issue: " + (result.message || "unknown error"));
+    if(result.status === 'ok'){
+      el.textContent = "Saved to Airtable";
+      el.classList.add('ok');
+      return true;
+    } else {
+      el.textContent = "Not saved — " + (result.message || "unknown error") + ". Your answer is still in the box above, try Save again.";
+      el.classList.add('error');
+      return false;
+    }
   }catch(e){
-    el.textContent = "Couldn't reach the Airtable relay";
+    el.textContent = "Not saved — couldn't reach the Airtable relay. Your answer is still in the box above, try Save again.";
+    el.classList.add('error');
+    return false;
   }
 }
 
