@@ -730,34 +730,76 @@ async function syncGoalToAirtable(becauseX, wantY, checkpointId){
 /* ---------- daily + weekly load/save ---------- */
 async function loadToday(dateStr){
   dateStr = dateStr || localDateStr();
-  try{
-    const result = await safeStorage.get('checkin:' + dateStr);
-    if(result && result.value){
-      const saved = JSON.parse(result.value);
-      if(saved.habits) state.habits = saved.habits;
-      if(saved.individual) state.individual.completed = saved.individual.completed;
-      state.s1 = saved.s1 || ""; state.s2 = saved.s2 || ""; state.s3 = saved.s3 || "";
-    } else {
+  let remoteFound = false;
+  let remoteTasks = [];
+  let remoteS1 = "", remoteS2 = "", remoteS3 = "";
+
+  // Airtable is the source of truth across devices — try it first. Local
+  // storage below is just a same-device fallback for offline use or before
+  // the very first sync.
+  if(RELAY_URL && participantEmail && !getPreviewOverride()){
+    try{
+      const response = await fetch(RELAY_URL, { method:"POST", body: JSON.stringify({ type:"getCheckIn", email:participantEmail, date:dateStr }) });
+      const result = await response.json();
+      if(result.status === 'ok' && result.found){
+        remoteFound = true;
+        try{ remoteTasks = JSON.parse(result.tasksJson || '[]'); }catch(e){ remoteTasks = []; }
+        remoteS1 = result.s1 || ""; remoteS2 = result.s2 || ""; remoteS3 = result.s3 || "";
+      }
+    }catch(e){ /* offline or relay unreachable — fall back to local cache below */ }
+  }
+
+  if(remoteFound){
+    state.habits = state.habits.map(h => {
+      const match = remoteTasks.find(t => t.source === 'habit' && t.text === h.text);
+      return match ? {...h, completed: !!match.completed} : h;
+    });
+    state.assigned = state.assigned.map(a => {
+      const match = remoteTasks.find(t => t.text === a.text && t.source === a.source);
+      return match ? {...a, completed: !!match.completed, response: match.response !== undefined ? match.response : a.response} : a;
+    });
+    const indivMatch = remoteTasks.find(t => t.source === 'individualized');
+    state.individual.completed = indivMatch ? !!indivMatch.completed : false;
+    state.s1 = remoteS1; state.s2 = remoteS2; state.s3 = remoteS3;
+
+    // Write-through cache: keeps this device's local copy current too, so
+    // it still shows the right thing instantly next time, even offline.
+    try{
+      await safeStorage.set('checkin:' + dateStr, JSON.stringify({ habits: state.habits, individual: {completed: state.individual.completed}, s1: state.s1, s2: state.s2, s3: state.s3 }));
+      await safeStorage.set(weekKey(currentWeek), JSON.stringify(state.assigned));
+    }catch(e){}
+  } else {
+    // No record in Airtable for this day yet (or we couldn't reach it) —
+    // fall back to whatever this device has cached locally, same as before.
+    try{
+      const result = await safeStorage.get('checkin:' + dateStr);
+      if(result && result.value){
+        const saved = JSON.parse(result.value);
+        if(saved.habits) state.habits = saved.habits;
+        if(saved.individual) state.individual.completed = saved.individual.completed;
+        state.s1 = saved.s1 || ""; state.s2 = saved.s2 || ""; state.s3 = saved.s3 || "";
+      } else {
+        state.s1 = ""; state.s2 = ""; state.s3 = "";
+      }
+    }catch(e){
       state.s1 = ""; state.s2 = ""; state.s3 = "";
     }
-  }catch(e){
-    state.s1 = ""; state.s2 = ""; state.s3 = "";
+
+    try{
+      const weekResult = await safeStorage.get(weekKey(currentWeek));
+      if(weekResult && weekResult.value){
+        const savedAssigned = JSON.parse(weekResult.value);
+        state.assigned = state.assigned.map(t => {
+          const match = savedAssigned.find(s => s.text === t.text);
+          return match ? {...t, completed: match.completed, response: match.response} : t;
+        });
+      }
+    }catch(e){ /* no local weekly progress either */ }
   }
+
   document.getElementById('s1').value = state.s1;
   document.getElementById('s2').value = state.s2;
   document.getElementById('s3').value = state.s3;
-
-  try{
-    const weekResult = await safeStorage.get(weekKey(currentWeek));
-    if(weekResult && weekResult.value){
-      const savedAssigned = JSON.parse(weekResult.value);
-      // merge saved completion/response state onto this week's real task list, matched by text
-      state.assigned = state.assigned.map(t => {
-        const match = savedAssigned.find(s => s.text === t.text);
-        return match ? {...t, completed: match.completed, response: match.response} : t;
-      });
-    }
-  }catch(e){ /* no weekly progress saved yet */ }
 
   renderTasks();
   await renderStreak();
