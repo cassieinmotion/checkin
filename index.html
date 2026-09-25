@@ -246,7 +246,9 @@ function governingCheckpointWeek(n){ return n>=10?10 : n>=7?7 : n>=4?4 : 1; }
 function isCheckpointWeek(n){ return [1,4,7,10].includes(n); }
 
 // Assigned (weekly) tasks only — habits and the individualized task are handled separately.
-// hasResponse:true marks the 5 flagged long-form tasks that feed the phase reports.
+// Every task below gets a written-response box now, not just a checkbox —
+// hasResponse:true still appears on individual entries from earlier weeks,
+// but is overridden at load time in loadWeek() so it applies universally.
 const WEEKS_CONFIG_RAW = {
   1: [],
   2: [
@@ -571,7 +573,7 @@ function taskRow(t, onToggle){
   if(t.hasResponse){
     const box = document.createElement('div');
     box.className = 'response-box';
-    box.innerHTML = `<p class="response-label">Your response — this one gets saved for your progress report</p>`;
+    box.innerHTML = `<p class="response-label">Your response</p>`;
     const ta = document.createElement('textarea');
     ta.placeholder = "Write here...";
     ta.value = t.response || "";
@@ -895,7 +897,14 @@ async function loadWeek(n, dateStr){
     PHASE_NAMES[phaseForWeek(n)] + " · Week " + n + " · " + WEEK_TITLES[n];
 
   state.habits = JSON.parse(JSON.stringify(defaultHabits));
-  state.assigned = WEEKS_CONFIG[n].map(t => ({...t, source: t.source || "assigned", completed:false, response: t.hasResponse ? "" : undefined}));
+  state.assigned = WEEKS_CONFIG[n].map(t => {
+    const src = t.source || "assigned";
+    // Every regular weekly task now gets a response box — not just the
+    // handful that used to be individually flagged. Reflection tasks (which
+    // link out to the separate /reflect/ page) are untouched by this.
+    const hasResponse = src === "assigned";
+    return {...t, source: src, hasResponse, completed:false, response: hasResponse ? "" : undefined};
+  });
   state.individual.completed = false;
 
   await loadCheckpointFields();
