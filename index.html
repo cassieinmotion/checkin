@@ -163,7 +163,7 @@
   </div>
 
   <div style="margin:0 0 24px;">
-    <button class="goal-edit-btn" id="historyBtn">Email me my previous answers</button>
+    <button class="goal-edit-btn" id="historyBtn">Email me all my previous answers</button>
     <div id="historyPanel" style="display:none;margin-top:12px;"></div>
   </div>
 
@@ -1004,7 +1004,7 @@ async function loadHistory(){
   }
 
   const loading = document.createElement('p'); loading.className = 'reflect-hint';
-  loading.textContent = "Sending your past answers to your email...";
+  loading.textContent = "Sending everything you've written to your email...";
   panel.appendChild(loading);
 
   try{
